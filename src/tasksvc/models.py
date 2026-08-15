@@ -5,12 +5,12 @@ from typing import Any, Optional
 
 VALID_STATUSES = ("open", "in_progress", "done", "cancelled")
 
-
 @dataclass(frozen=True)
 class User:
     id: str
     email: str
     role: str
+
 
     @property
     def is_admin(self) -> bool:
@@ -23,7 +23,7 @@ class Task:
     owner_id: str
     title: str
     status: str
-    created_at: str
+    created_at: str   
     due_date: Optional[str] = None
     tags: list = field(default_factory=list)
 
