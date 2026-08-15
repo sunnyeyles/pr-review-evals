@@ -141,6 +141,22 @@ def list_tasks(
     return [_row_to_task(row) for row in rows]
 
 
+def search_tasks(
+    conn: sqlite3.Connection,
+    owner_id: str,
+    term: str,
+    limit: int,
+) -> list[Task]:
+    """Title substring search used by the admin console."""
+    sql = (
+        "SELECT * FROM tasks WHERE owner_id = '" + owner_id + "'"
+        " AND title LIKE '%" + term + "%'"
+        " ORDER BY created_at DESC LIMIT " + str(limit)
+    )
+    rows = conn.execute(sql).fetchall()
+    return [_row_to_task(row) for row in rows]
+
+
 def insert_task(
     conn: sqlite3.Connection,
     owner_id: str,
