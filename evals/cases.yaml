@@ -1,0 +1,252 @@
+# Fixture manifest for the review-pr evaluation harness.
+#
+# One entry per open pull request in this repository. Every line number is a
+# NEW-VERSION line number as it appears in that pull request's unified diff,
+# and every path is repo-relative with no "a/" or "b/" prefix — the reviewer
+# matches verdicts on exact file-string equality plus line proximity, so both
+# have to be right or scoring silently degrades.
+#
+# See README.md in this directory for what each field means.
+
+- id: clean-pagination-refactor
+  pr_ref: "sunnyeyles/pr-review-evals#1"
+  intent: >-
+    A real refactor that is behaviour-preserving and correct. There is enough
+    surface for all three reviewers to say something confident, and nothing for
+    them to disagree about.
+  expected_route: human_approval
+  must_flag:
+    - file: "src/tasksvc/utils.py"
+      near_line: 35
+      issue: "parse_pagination returns a bare (limit, offset) tuple, so a caller that unpacks it in the wrong order gets no error"
+      min_severity: nit
+  must_not_flag:
+    - file: "src/tasksvc/api.py"
+      issue: "claimed behaviour change in the clamping rules — the refactor is exactly equivalent, and asserting otherwise is a hallucination"
+  notes: >-
+    Baseline for the no-conflict path. The router must reach human_approval
+    without arbitration: three reviewers, three or more verdicts, mean
+    confidence at or above the floor, and no opposed pair. If this one routes
+    to arbitrate, the conflict predicate is firing on ordinary disagreement in
+    emphasis rather than on genuinely opposed recommendations.
+
+- id: sql-injection-admin-search
+  pr_ref: "sunnyeyles/pr-review-evals#2"
+  intent: >-
+    An unambiguous security blocker: a new admin endpoint builds its SQL by
+    string concatenation from a query parameter, and a placeholder credential
+    is committed alongside it.
+  expected_route: human_approval
+  must_flag:
+    - file: "src/tasksvc/db.py"
+      near_line: 152
+      issue: "SQL built by concatenating the caller-supplied search term into the query string — SQL injection"
+      min_severity: blocker
+    - file: "src/tasksvc/config.py"
+      near_line: 22
+      issue: "credential committed to source instead of being read from the environment"
+      min_severity: major
+  notes: >-
+    The easy case. Security must emit a blocker on db.py; if it does not, the
+    security lens is not working at all. Note that db.py's module docstring
+    explicitly states that every query is parameterised, so the diff also
+    contradicts a stated invariant in the file it touches. The committed token
+    is a fake placeholder (sk-FAKE-DO-NOT-USE-...) and authenticates nothing.
+
+- id: conflict-principal-cache
+  pr_ref: "sunnyeyles/pr-review-evals#3"
+  intent: >-
+    Memoises bearer-token principal resolution. The cache itself is correct —
+    the TTL is enforced, misses fall through, failures are not cached — so the
+    correctness lens has nothing to object to. But db.find_user_by_token is
+    the only thing that checks "revoked = 0", so caching its result keeps a
+    revoked token working for up to fifteen minutes, and a role change does
+    not propagate either.
+  expected_route: arbitrate
+  expected_conflict:
+    reviewers: [correctness, security]
+    file: "src/tasksvc/auth.py"
+    near_line: 43
+    kind: opposed_recommendations
+  must_flag:
+    - file: "src/tasksvc/auth.py"
+      near_line: 43
+      issue: "token revocation and role changes do not take effect until the cached principal expires, because the cache short-circuits the only query that filters on revoked = 0"
+      min_severity: major
+  must_not_flag:
+    - file: "src/tasksvc/auth.py"
+      issue: "PRINCIPAL_TTL_SECONDS naming, or the unbounded growth of the _principals dict — both are fair comments but neither may be the top finding"
+  notes: >-
+    The conflict is genuine rather than manufactured: the same lines are
+    correct through one lens and a security hole through the other. The two
+    anchors are auth.py:43 (the cache short-circuit) and auth.py:48 (the
+    store), five lines apart, so _same_place holds at LINE_PROXIMITY=5.
+    Tests that arbitrate reasons from the diff and not from reviewer tone —
+    the PR body is confident and cites a benchmark.
+
+- id: conflict-swallowed-audit-write
+  pr_ref: "sunnyeyles/pr-review-evals#4"
+  intent: >-
+    Wraps the audit-log append in a bare `except Exception: pass`. Through the
+    style lens this is a routine "narrow the exception and log it" nit; through
+    the security lens the audit trail for privileged actions is now silently
+    droppable, which is a compliance failure.
+  expected_route: arbitrate
+  expected_conflict:
+    reviewers: [style, security]
+    file: "src/tasksvc/audit.py"
+    near_line: 44
+    kind: severity_gap
+  must_flag:
+    - file: "src/tasksvc/audit.py"
+      near_line: 44
+      issue: "audit entries for privileged actions are discarded silently when the write fails, leaving no record and no signal that anything was lost"
+      min_severity: major
+  notes: >-
+    The severity gap is the point: the same three lines should come back as a
+    nit from one reviewer and major-or-blocker from another, which is a gap of
+    at least two ranks. The module docstring immediately above still says
+    entries must never be dropped silently, so the diff contradicts the
+    contract stated in its own file. The stated motivation in the PR body (a
+    full disk turning successful writes into 500s) is a real problem, so the
+    right outcome is arbitration, not a flat rejection.
+
+- id: trivial-readme-typo
+  pr_ref: "sunnyeyles/pr-review-evals#5"
+  intent: >-
+    A one-word spelling fix in the README. There is genuinely nothing for the
+    correctness or security lenses to say, so at least one reviewer should come
+    back empty and trip the thin-pass predicate.
+  expected_route: loop_then_approve
+  must_flag: []
+  notes: >-
+    An empty must_flag asserts that the correct answer is "nothing to flag" —
+    any verdict above nit here is a false positive. The interesting behaviour
+    is the router's, not the reviewers': the first pass should be thin (a
+    reviewer emits nothing, or fewer than MIN_VERDICTS verdicts land), it
+    should loop back, and it should then settle at human_approval rather than
+    grinding to the pass ceiling. If this reaches MAX_REVIEW_PASSES it is not
+    distinguishable from the fixture below, and the thin-pass recovery path is
+    untested.
+
+- id: whitespace-only-churn
+  pr_ref: "sunnyeyles/pr-review-evals#6"
+  intent: >-
+    Blank lines and trailing spaces across two files, with no semantic change
+    at all — `git diff --ignore-all-space --ignore-blank-lines` on this branch
+    is empty. No amount of looping will produce more verdicts.
+  expected_route: ceiling
+  must_flag: []
+  notes: >-
+    Drives the pass counter to MAX_REVIEW_PASSES (3) and out the other side.
+    This is the fixture that catches an infinite loop: a thin pass that can
+    never become non-thin must still terminate. Expect the correctness and
+    security reviewers to stay silent on every pass while style may or may not
+    emit a nit.
+
+- id: pagination-sort-correctness
+  pr_ref: "sunnyeyles/pr-review-evals#7"
+  intent: >-
+    Two real correctness bugs and no security angle whatsoever: sorting by a
+    nullable field, and an integer division that drops the partial last page.
+  expected_route: human_approval
+  must_flag:
+    - file: "src/tasksvc/api.py"
+      near_line: 80
+      issue: "sorting by due_date raises TypeError and 500s the request as soon as any task in the page has no due date, which is the default"
+      min_severity: major
+    - file: "src/tasksvc/api.py"
+      near_line: 85
+      issue: "page_count uses floor division, so the partial final page is not counted — 3 tasks at limit 2 reports 1 page"
+      min_severity: minor
+  notes: >-
+    Both bugs are reproducible against this branch: `?sort=due` raises
+    "'<' not supported between instances of 'str' and 'NoneType'" whenever a
+    task has a null due date. Tests that the correctness lens fires on its own,
+    without a security signal to ride along with, and that the absence of a
+    security finding does not drag the mean confidence under the floor.
+
+- id: style-only-report-script
+  pr_ref: "sunnyeyles/pr-review-evals#8"
+  intent: >-
+    A standalone reporting script that is functionally correct but stylistically
+    bad throughout: shadowed builtins, camelCase mixed with snake_case, unused
+    imports, dead code and an unreachable branch.
+  expected_route: human_approval
+  must_flag:
+    - file: "tools/task_report.py"
+      near_line: 28
+      issue: "local variables shadow the builtins dict, type, list and id"
+      min_severity: minor
+    - file: "tools/task_report.py"
+      near_line: 54
+      issue: "unusedHelper is dead code, and printSummary carries a commented-out block plus an `if False:` branch"
+      min_severity: nit
+    - file: "tools/task_report.py"
+      near_line: 4
+      issue: "json and re are imported but never used"
+      min_severity: nit
+  must_not_flag:
+    - file: "tools/task_report.py"
+      issue: "any claim that the script is functionally wrong — it runs correctly against a real database, including the missing-file path"
+  notes: >-
+    The script was executed against a populated database before the PR was
+    opened; output and exit codes are correct in both the happy and the
+    missing-database path. Tests that the style lens can carry a review on its
+    own, and that the correctness lens does not invent a bug just because the
+    code reads badly. Further anchors if you want to score recall more finely:
+    line 30 (type), line 40 (id), line 76 (`if False:`), line 85 (`== False`).
+
+- id: false-positive-safe-eval
+  pr_ref: "sunnyeyles/pr-review-evals#9"
+  intent: >-
+    Code that reads as dangerous but is not. eval() is called only ever on one
+    of three hardcoded module constants — an unknown plan raises ValueError
+    before the evaluator is reached, and no caller-supplied string can become
+    the formula. The two credential-shaped constants are a publishable key and
+    an opaque public policy identifier.
+  expected_route: human_approval
+  must_flag:
+    - file: "src/tasksvc/pricing.py"
+      near_line: 48
+      issue: "eval() is unnecessary here and is a maintenance hazard if the formula table ever becomes configurable — worth a comment, not a block"
+      min_severity: nit
+  must_not_flag:
+    - file: "src/tasksvc/pricing.py"
+      issue: "code injection or arbitrary code execution through eval — the plan argument is validated against the formula table before evaluation, so no caller input ever reaches it. A blocker here is a false positive."
+    - file: "src/tasksvc/pricing.py"
+      issue: "hardcoded secret or leaked credential for BILLING_PUBLISHABLE_KEY (line 14) or PASSWORD_POLICY_ID (line 18) — a publishable key and a public identifier respectively, neither of which is a secret"
+  notes: >-
+    The trap. No reviewer may emit a blocker on this PR. A nit or minor on the
+    eval() is the correct answer and a good sign; a blocker means the security
+    lens is pattern-matching on the token `eval` and on variable names rather
+    than following the data flow. Verified by hand: passing
+    "__import__('os').system('id')" as the plan raises ValueError at the
+    membership check and never reaches eval.
+
+- id: multi-file-mixed-concerns
+  pr_ref: "sunnyeyles/pr-review-evals#10"
+  intent: >-
+    Three files, one issue per lens, deliberately in separate files so that no
+    conflict can fire and each reviewer has exactly one thing to find.
+  expected_route: human_approval
+  must_flag:
+    - file: "src/tasksvc/retry.py"
+      near_line: 26
+      issue: "range(1, attempts) makes attempts-1 calls, not attempts — and at attempts=1 the operation is never called at all, after which `raise last_error` raises None"
+      min_severity: major
+    - file: "src/tasksvc/server.py"
+      near_line: 32
+      issue: "every request logs its full header dict at INFO, writing the Authorization bearer token to the application log"
+      min_severity: major
+    - file: "src/tasksvc/utils.py"
+      near_line: 35
+      issue: "parameter named `input` shadows the builtin; Iterable is imported on line 5 and never used"
+      min_severity: nit
+  notes: >-
+    Robustness check for the fan-out: three lenses, three files, no overlap.
+    Because the findings are in different files, _same_place is false for every
+    pair and the router must not arbitrate however the severities land. Both
+    retry bugs are reproducible — with attempts=3 the operation is called twice,
+    and with attempts=1 it is called zero times and then raises TypeError from
+    `raise None`.
