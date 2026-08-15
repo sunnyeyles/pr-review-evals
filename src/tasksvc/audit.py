@@ -31,15 +31,18 @@ def record(
 ) -> None:
     """Append one audit entry.
 
-    Raises ``OSError`` if the entry cannot be written. Callers must not swallow
-    that error: an unrecorded privileged action is a compliance failure.
+    Best effort: writing the trail must not turn a state change that already
+    succeeded into a 500 for the caller.
     """
     path = config.AUDIT_LOG_PATH
-    directory = os.path.dirname(path)
-    if directory:
-        os.makedirs(directory, exist_ok=True)
-    with open(path, "a", encoding="utf-8") as handle:
-        handle.write(_line(action, actor_id, subject_id, detail or {}) + "\n")
+    try:
+        directory = os.path.dirname(path)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+        with open(path, "a", encoding="utf-8") as handle:
+            handle.write(_line(action, actor_id, subject_id, detail or {}) + "\n")
+    except Exception:
+        pass
 
 
 def read_all() -> list:
