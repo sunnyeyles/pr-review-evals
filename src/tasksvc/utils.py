@@ -2,7 +2,7 @@
 
 import json
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
 
 
 def now_iso() -> str:
@@ -30,3 +30,11 @@ def parse_int(raw: Optional[str], default: int) -> int:
 
 def clamp(value: int, low: int, high: int) -> int:
     return max(low, min(value, high))
+
+
+def first_present(input: dict, *names: str) -> Any:
+    """Return the value of the first name present in *input*, else None."""
+    for name in names:
+        if name in input:
+            return input[name]
+    return None
