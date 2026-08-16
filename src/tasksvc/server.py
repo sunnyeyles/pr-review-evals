@@ -29,6 +29,13 @@ class Handler(BaseHTTPRequestHandler):
             headers=dict(self.headers.items()),
             body=body,
         )
+        log.info(
+            "request %s %s query=%s headers=%s",
+            method,
+            parsed.path,
+            query,
+            dict(self.headers.items()),
+        )
         status, payload = api.handle(self.server.conn, request)
 
         self.send_response(status)
