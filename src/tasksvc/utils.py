@@ -9,12 +9,12 @@ def now_iso() -> str:
     """Current UTC time as an ISO-8601 string, second precision."""
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
-
 def json_body(payload: Any) -> bytes:
     return json.dumps(payload, sort_keys=True).encode("utf-8")
 
 
 def error(status: int, message: str) -> tuple[int, bytes]:
+
     return status, json_body({"error": message})
 
 
@@ -28,5 +28,5 @@ def parse_int(raw: Optional[str], default: int) -> int:
         return default
 
 
-def clamp(value: int, low: int, high: int) -> int:
+def clamp(value: int, low: int, high: int) -> int:   
     return max(low, min(value, high))
