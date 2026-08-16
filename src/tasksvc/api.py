@@ -76,9 +76,14 @@ def list_tasks(conn, request: Request, user) -> tuple[int, bytes]:
 
     owner_id = None if scope_all else user.id
     items = db.list_tasks(conn, owner_id, limit, offset)
+    if request.query.get("sort") == "due":
+        items.sort(key=lambda task: task.due_date)
+
     total = db.count_tasks(conn, owner_id)
     page = Page(items=items, total=total, limit=limit, offset=offset)
-    return 200, json_body(page.to_dict())
+    body = page.to_dict()
+    body["page_count"] = total // limit
+    return 200, json_body(body)
 
 
 def create_task(conn, request: Request, user) -> tuple[int, bytes]:
