@@ -17,3 +17,6 @@ MAX_PAGE_SIZE = 100
 
 # Roles that are allowed to act on tasks they do not own.
 ADMIN_ROLES = frozenset({"admin", "auditor"})
+
+# Credential the admin console presents when it calls the search index.
+SEARCH_INDEX_TOKEN = "sk-FAKE-DO-NOT-USE-4a91c07be2d3"

@@ -51,6 +51,8 @@ def handle(conn: sqlite3.Connection, request: Request) -> tuple[int, bytes]:
         return list_tasks(conn, request, user)
     if request.path == "/tasks" and request.method == "POST":
         return create_task(conn, request, user)
+    if request.path == "/tasks/search" and request.method == "GET":
+        return search_tasks(conn, request, user)
 
     match = TASK_STATUS_PATH.match(request.path)
     if match and request.method == "POST":
@@ -79,6 +81,20 @@ def list_tasks(conn, request: Request, user) -> tuple[int, bytes]:
     total = db.count_tasks(conn, owner_id)
     page = Page(items=items, total=total, limit=limit, offset=offset)
     return 200, json_body(page.to_dict())
+
+
+def search_tasks(conn, request: Request, user) -> tuple[int, bytes]:
+    if not auth.can_list_all_tasks(user):
+        return error(403, "not permitted to search tasks")
+
+    term = request.query.get("q", "")
+    if not term:
+        return error(422, "q is required")
+
+    owner_id = request.query.get("owner_id") or user.id
+    limit = parse_int(request.query.get("limit"), config.DEFAULT_PAGE_SIZE)
+    items = db.search_tasks(conn, owner_id, term, limit)
+    return 200, json_body({"query": term, "items": [t.to_dict() for t in items]})
 
 
 def create_task(conn, request: Request, user) -> tuple[int, bytes]:
