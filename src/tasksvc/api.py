@@ -13,7 +13,7 @@ from typing import Optional
 
 from . import audit, auth, config, db
 from .models import Page, VALID_STATUSES
-from .utils import clamp, error, json_body, parse_int
+from .utils import error, json_body, parse_pagination
 
 TASK_ID_PATH = re.compile(r"^/tasks/([A-Za-z0-9-]+)$")
 TASK_STATUS_PATH = re.compile(r"^/tasks/([A-Za-z0-9-]+)/status$")
@@ -64,11 +64,9 @@ def handle(conn: sqlite3.Connection, request: Request) -> tuple[int, bytes]:
 
 
 def list_tasks(conn, request: Request, user) -> tuple[int, bytes]:
-    limit = parse_int(request.query.get("limit"), config.DEFAULT_PAGE_SIZE)
-    limit = clamp(limit, 1, config.MAX_PAGE_SIZE)
-    offset = parse_int(request.query.get("offset"), 0)
-    if offset < 0:
-        offset = 0
+    limit, offset = parse_pagination(
+        request.query, config.DEFAULT_PAGE_SIZE, config.MAX_PAGE_SIZE
+    )
 
     scope_all = request.query.get("scope") == "all"
     if scope_all and not auth.can_list_all_tasks(user):

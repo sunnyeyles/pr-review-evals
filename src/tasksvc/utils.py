@@ -30,3 +30,9 @@ def parse_int(raw: Optional[str], default: int) -> int:
 
 def clamp(value: int, low: int, high: int) -> int:
     return max(low, min(value, high))
+
+
+def parse_pagination(query: dict, default_limit: int, max_limit: int) -> tuple[int, int]:
+    limit = clamp(parse_int(query.get("limit"), default_limit), 1, max_limit)
+    offset = max(0, parse_int(query.get("offset"), 0))
+    return limit, offset
