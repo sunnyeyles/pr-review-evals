@@ -55,7 +55,7 @@ Configuration comes from the environment: `TASKSVC_DB`, `TASKSVC_HOST`,
 | `GET` | `/tasks/{id}` | Reads one task. |
 | `POST` | `/tasks/{id}/status` | Moves a task between statuses. |
 
-Every request must recieve an `Authorization: Bearer <token>` header except the
+Every request must receive an `Authorization: Bearer <token>` header except the
 liveness probe. Tokens are stored as SHA-256 digests, never in plain text.
 
 ## Licence
