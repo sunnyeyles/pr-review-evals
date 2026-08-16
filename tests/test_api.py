@@ -8,11 +8,12 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from tasksvc import api, config, db  # noqa: E402
+from tasksvc import api, auth, config, db  # noqa: E402
 
 
 class ApiTestCase(unittest.TestCase):
     def setUp(self):
+        auth.reset_cache()
         self.tmp = tempfile.TemporaryDirectory()
         config.AUDIT_LOG_PATH = os.path.join(self.tmp.name, "audit.log")
         self.conn = db.connect(":memory:")
